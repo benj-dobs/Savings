@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/benj-dobs/Savings#readme",
   "dependencies": {
+    "@types/node": "^14.14.22",
     "@types/readline-sync": "^1.4.3",
     "chrono-node": "^2.1.11",
     "date-fns": "^2.16.1",
