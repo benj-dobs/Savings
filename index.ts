@@ -1,24 +1,24 @@
-import prompts from "prompts";
+import inquirer from 'inquirer';
 import { createGoal } from "./goal";
 import { getTransactions } from "./qif";
 
 async function mainMenu() {
   while (true) {
-    const { value: action } = await prompts({
-      type: "select",
+    const { value: action } = await inquirer.prompt({
+      type: "list",
       name: "value",
       message: "What do you want to do?",
       choices: [
         {
-          title: "Create a goal",
+          name: "Create a goal",
           value: () => createGoal(),
         },
         {
-          title: "Show transactions",
+          name: "Show transactions",
           value: () => console.log("not implemented"),
         },
         {
-          title: "Quit",
+          name: "Quit",
           value: null,
         },
       ],
@@ -26,7 +26,7 @@ async function mainMenu() {
     if (!action) {
       return;
     }
-    action();
+    await action();
   }
 }
 
