@@ -46,7 +46,7 @@ const makeDateInput = (options: any) => ({
   type: "autocomplete",
   suggestOnly: true,
   emptyText: "Not a date",
-  filter: (input) => input || options.default,
+  filter: (input) => chrono.parseDate(input || options.default),
   validate: (input) =>
     chrono.parseDate(input || options.default) === null ? "Not a date" : true,
   source: async (_, input: string) => {
@@ -60,7 +60,7 @@ const makeDateInput = (options: any) => ({
 });
 
 export async function createGoal() {
-  const goal = await inquirer.prompt([
+  const newGoal = await inquirer.prompt([
     {
       name: "tag",
       message: "What is the goal called?",
@@ -95,20 +95,6 @@ export async function createGoal() {
     },
   ]);
 
-  console.table(goal);
-
-  // const newGoal = {
-  //   tag,
-  //   startBalance,
-  //   endBalance,
-  //   startDate,
-  //   endDate,
-  // };
-  // goals = [...goals, newGoal];
+  goals = [...goals, newGoal];
   writeFile("Data/goals.json", JSON.stringify(goals), () => {});
-}
-
-function promptDate(prompt: string, fallback: string): Date {
-  const dateString = question(`${[prompt]} [${fallback}]: `) || fallback;
-  return chrono.parseDate(dateString);
 }
