@@ -1,7 +1,15 @@
 import * as chrono from "chrono-node";
+import {
+  differenceInMilliseconds,
+  differenceInSeconds,
+  formatDuration,
+  isAfter,
+} from "date-fns";
 import { existsSync, readFileSync, writeFile } from "fs";
 import inquirer from "inquirer";
 import autocomplete from "inquirer-autocomplete-prompt";
+import parseDuration from "parse-duration";
+import { getTransactions } from "./qif";
 
 inquirer.registerPrompt("autocomplete", autocomplete);
 
@@ -15,12 +23,11 @@ function parseGoal(goalJson: GoalJson): Goal {
   return {
     ...goalJson,
     startDate: chrono.parseDate(goalJson.startDate),
-    endDate: chrono.parseDate(goalJson.endDate),
   };
 }
 export interface Goal {
   startDate: Date;
-  endDate: Date;
+  durationInSeconds: number;
   tag: string;
   startBalance: number;
   endBalance: number;
@@ -31,7 +38,7 @@ type GoalJson = {
   startBalance: number;
   endBalance: number;
   startDate: string;
-  endDate: string;
+  durationInSeconds: number;
 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
@@ -46,24 +53,6 @@ const currencyFormatter = new Intl.NumberFormat("en-GB", {
   currency: "GBP",
 });
 
-const makeDateInput = (options: any) => ({
-  ...options,
-  type: "autocomplete",
-  suggestOnly: true,
-  emptyText: "Not a date",
-  filter: (input) => chrono.parseDate(input || options.default),
-  validate: (input) =>
-    chrono.parseDate(input || options.default) === null ? "Not a date" : true,
-  source: async (_, input: string) => {
-    const date = chrono.parseDate(input || options.default);
-    if (!date) {
-      return [];
-    } else {
-      return [dateFormatter.format(date)];
-    }
-  },
-});
-
 export async function createGoal() {
   const newGoal = await inquirer.prompt([
     {
@@ -76,16 +65,45 @@ export async function createGoal() {
           ? "Name already in use"
           : true,
     },
-    makeDateInput({
+    {
       name: "startDate",
       message: "When does the goal start?",
       default: "Today",
-    }),
-    makeDateInput({
-      name: "endDate",
-      message: "When does the end?",
-      default: "in 1 year",
-    }),
+      type: "autocomplete",
+      suggestOnly: true,
+      emptyText: "Not a date",
+      filter: (input) => chrono.parseDate(input || "Today"),
+      validate: (input) =>
+        chrono.parseDate(input || "Today") === null ? "Not a date" : true,
+      source: async (_, input: string) => {
+        const date = chrono.parseDate(input || "Today");
+        if (!date) {
+          return [];
+        } else {
+          return [dateFormatter.format(date)];
+        }
+      },
+    },
+    {
+      name: "durationInSeconds",
+      message: "How long should the goal last?",
+      default: "1 year",
+      type: "autocomplete",
+      suggestOnly: true,
+      emptyText: "Not a duration",
+      filter: (input) => parseDuration(input || "1 year"),
+      validate: (input) =>
+        parseDuration(input || "1 year") === null ? "Not a duration" : true,
+      source: async (_, input: string) => {
+        const durationInSeconds = parseDuration(input || "1 year");
+
+        if (!durationInSeconds) {
+          return [];
+        } else {
+          return [formatDuration({ seconds: durationInSeconds })];
+        }
+      },
+    },
     {
       type: "number",
       name: "startBalance",
@@ -97,6 +115,7 @@ export async function createGoal() {
       name: "endBalance",
       message: "How much do you want to save?",
       validate: (input) => (isNaN(input) ? "Please enter a number" : true),
+      transformer: (input) => currencyFormatter.format(input),
     },
   ]);
 
@@ -106,14 +125,27 @@ export async function createGoal() {
 }
 
 export function showGoals() {
+  const savings = calculateSavings();
   const formattedGoals = goals
-    .map((goal) => ({
-      tag: goal.tag,
-      "Start date": dateFormatter.format(goal.startDate),
-      "End date": dateFormatter.format(goal.endDate),
-      "Start balance": currencyFormatter.format(goal.startBalance),
-      "End balance": currencyFormatter.format(goal.endBalance),
-    }))
+    .map((goal) => {
+      const goalSavings = savings.find((s) => s.tag === goal.tag).savings;
+      const expectedGoalSavings =
+        (goal.endBalance *
+          differenceInMilliseconds(Date.now(), goal.startDate)) /
+        goal.durationInSeconds;
+      return {
+        tag: goal.tag,
+        "Start date": dateFormatter.format(goal.startDate),
+        "Start balance": currencyFormatter.format(goal.startBalance),
+        Duration: goal.durationInSeconds,
+        "Savings target": currencyFormatter.format(goal.endBalance),
+        "Expected savings by today": currencyFormatter.format(
+          expectedGoalSavings
+        ),
+        "Savings achieved": currencyFormatter.format(goalSavings),
+        Surplus: currencyFormatter.format(goalSavings - expectedGoalSavings),
+      };
+    })
     .reduce((map, goal) => {
       const { tag, ...namelessGoal } = goal;
       return {
@@ -121,5 +153,39 @@ export function showGoals() {
         [tag]: namelessGoal,
       };
     }, {});
-    console.table(formattedGoals)
+  console.table(formattedGoals);
+}
+
+function calculateSavings() {
+  const transactions = getTransactions();
+  const savingSplit = transactions.map((t) => {
+    const relevantGoals = goals.filter((g) =>
+      isAfter(chrono.parseDate(t.date), g.startDate)
+    );
+    const totalDailySavings = relevantGoals.reduce(
+      (total, goal) => total + getDailySavings(goal),
+      0
+    );
+    return relevantGoals.map((g) => ({
+      tag: g.tag,
+      date: t.date,
+      savings: t.amount * (getDailySavings(g) / totalDailySavings),
+    }));
+  });
+  const totalSavingsByGoal = goals.map((g) => {
+    const savings = savingSplit
+      .flatMap((split) => split.filter((goal) => goal.tag === g.tag))
+      .reduce((total, goal) => total + goal.savings, g.startBalance);
+    return {
+      tag: g.tag,
+      savings,
+    };
+  });
+  return totalSavingsByGoal;
+}
+
+function getDailySavings(goal: Goal) {
+  return (
+    (goal.endBalance - goal.startBalance) / (goal.durationInSeconds / 86400)
+  );
 }

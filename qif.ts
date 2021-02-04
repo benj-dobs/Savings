@@ -9,6 +9,13 @@ export function getTransactions(): ReadonlyArray<QifTransaction> {
     }
     const qifText = readFileSync(`Data/${fileName}`).toString();
     const { transactions }: QifData = deserializeQif(qifText);
-    return transactions;
+    const transactionsWithStandardisedDates = transactions.map((t) => ({
+      ...t,
+      date: t.date.replace(
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})/,
+        (_, day, month, year) => `${year}-${month}-${day}`
+      ),
+    }));
+    return transactionsWithStandardisedDates;
   });
 }
