@@ -1,5 +1,4 @@
 import * as chrono from "chrono-node";
-import { question } from "readline-sync";
 import { existsSync, readFileSync, writeFile } from "fs";
 import inquirer from "inquirer";
 import autocomplete from "inquirer-autocomplete-prompt";
