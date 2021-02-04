@@ -41,6 +41,12 @@ const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   month: "long",
   year: "numeric",
 });
+
+const currencyFormatter = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+});
+
 const makeDateInput = (options: any) => ({
   ...options,
   type: "autocomplete",
@@ -97,4 +103,24 @@ export async function createGoal() {
 
   goals = [...goals, newGoal];
   writeFile("Data/goals.json", JSON.stringify(goals), () => {});
+  showGoals();
+}
+
+export function showGoals() {
+  const formattedGoals = goals
+    .map((goal) => ({
+      tag: goal.tag,
+      "Start date": dateFormatter.format(goal.startDate),
+      "End date": dateFormatter.format(goal.endDate),
+      "Start balance": currencyFormatter.format(goal.startBalance),
+      "End balance": currencyFormatter.format(goal.endBalance),
+    }))
+    .reduce((map, goal) => {
+      const { tag, ...namelessGoal } = goal;
+      return {
+        ...map,
+        [tag]: namelessGoal,
+      };
+    }, {});
+    console.table(formattedGoals)
 }

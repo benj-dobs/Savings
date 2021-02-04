@@ -1,6 +1,5 @@
-import inquirer from 'inquirer';
-import { createGoal } from "./goal";
-import { getTransactions } from "./qif";
+import inquirer from "inquirer";
+import { createGoal, showGoals } from "./goal";
 
 async function mainMenu() {
   while (true) {
@@ -12,6 +11,10 @@ async function mainMenu() {
         {
           name: "Create a goal",
           value: () => createGoal(),
+        },
+        {
+          name: "Show goals",
+          value: () => showGoals(),
         },
         {
           name: "Show transactions",
