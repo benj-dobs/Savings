@@ -1,5 +1,5 @@
 import inquirer from "inquirer";
-import { createGoal, showGoals } from "./goal";
+import { createGoal, editGoals, showGoals } from "./goal";
 
 async function mainMenu() {
   while (true) {
@@ -15,6 +15,10 @@ async function mainMenu() {
         {
           name: "Show goals",
           value: () => showGoals(),
+        },
+        {
+          name: 'Edit goals',
+          value: () => editGoals()
         },
         {
           name: "Show transactions",

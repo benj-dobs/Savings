@@ -53,73 +53,112 @@ const currencyFormatter = new Intl.NumberFormat("en-GB", {
   currency: "GBP",
 });
 
-export async function createGoal() {
-  const newGoal = await inquirer.prompt([
-    {
-      name: "tag",
-      message: "What is the goal called?",
-      validate: (tag) =>
-        !tag
-          ? "Please enter a name"
-          : goals.some((goal) => goal.tag === tag)
-          ? "Name already in use"
-          : true,
-    },
-    {
-      name: "startDate",
-      message: "When does the goal start?",
-      default: "Today",
-      type: "autocomplete",
-      suggestOnly: true,
-      emptyText: "Not a date",
-      filter: (input) => chrono.parseDate(input || "Today"),
-      validate: (input) =>
-        chrono.parseDate(input || "Today") === null ? "Not a date" : true,
-      source: async (_, input: string) => {
-        const date = chrono.parseDate(input || "Today");
-        if (!date) {
-          return [];
-        } else {
-          return [dateFormatter.format(date)];
-        }
-      },
-    },
-    {
-      name: "durationInSeconds",
-      message: "How long should the goal last?",
-      default: "1 year",
-      type: "autocomplete",
-      suggestOnly: true,
-      emptyText: "Not a duration",
-      filter: (input) => parseDuration(input || "1 year"),
-      validate: (input) =>
-        parseDuration(input || "1 year") === null ? "Not a duration" : true,
-      source: async (_, input: string) => {
-        const durationInSeconds = parseDuration(input || "1 year");
+const tagQuestion = {
+  name: "tag",
+  message: "What is the goal called?",
+  validate: (tag) =>
+    !tag
+      ? "Please enter a name"
+      : goals.some((goal) => goal.tag === tag)
+      ? "Name already in use"
+      : true,
+};
+const startDateQuestion = {
+  name: "startDate",
+  message: "When does the goal start?",
+  default: "Today",
+  type: "autocomplete",
+  suggestOnly: true,
+  emptyText: "Not a date",
+  filter: (input) => chrono.parseDate(input || "Today"),
+  validate: (input) =>
+    chrono.parseDate(input || "Today") === null ? "Not a date" : true,
+  source: async (_, input: string) => {
+    const date = chrono.parseDate(input || "Today");
+    if (!date) {
+      return [];
+    } else {
+      return [dateFormatter.format(date)];
+    }
+  },
+};
+const durationQuestion = {
+  name: "durationInSeconds",
+  message: "How long should the goal last?",
+  default: "1 year",
+  type: "autocomplete",
+  suggestOnly: true,
+  emptyText: "Not a duration",
+  filter: (input) => parseDuration(input || "1 year"),
+  validate: (input) =>
+    parseDuration(input || "1 year") === null ? "Not a duration" : true,
+  source: async (_, input: string) => {
+    const durationInSeconds = parseDuration(input || "1 year");
 
-        if (!durationInSeconds) {
-          return [];
-        } else {
-          return [formatDuration({ seconds: durationInSeconds })];
-        }
-      },
+    if (!durationInSeconds) {
+      return [];
+    } else {
+      return [formatDuration({ seconds: durationInSeconds })];
+    }
+  },
+};
+const startBalanceQuestion: inquirer.DistinctQuestion<any> = {
+  type: "number",
+  name: "startBalance",
+  message: "How much is saved at the goal start date?",
+  default: 0,
+  validate: (input) => (isNaN(input) ? "Please enter a number" : true),
+  transformer: (input) => currencyFormatter.format(input),
+};
+const endBalanceQuestion: inquirer.DistinctQuestion<any> = {
+  type: "number",
+  name: "endBalance",
+  message: "How much do you want to save?",
+  validate: (input) => (isNaN(input) ? "Please enter a number" : true),
+  transformer: (input) => currencyFormatter.format(input),
+};
+const goalCreationQuestions = [
+  tagQuestion,
+  startDateQuestion,
+  durationQuestion,
+  startBalanceQuestion,
+  endBalanceQuestion,
+];
+export async function createGoal() {
+  const newGoal = await inquirer.prompt(goalCreationQuestions);
+
+  goals = [...goals, newGoal];
+  writeFile("Data/goals.json", JSON.stringify(goals), () => {});
+  showGoals();
+}
+
+export async function editGoals() {
+  const { goal, field } = await inquirer.prompt([
+    {
+      type: "autocomplete",
+      name: "goal",
+      source: async (_, input) =>
+        goals
+          .map((g) => g.tag)
+          .filter((tag) => (input ? tag.startsWith(input) : true)),
+      filter: (tag) => goals.find((g) => g.tag === tag),
     },
     {
-      type: "number",
-      name: "startBalance",
-      message: "How much is saved at the goal start date?",
-      default: 0,
-    },
-    {
-      type: "number",
-      name: "endBalance",
-      message: "How much do you want to save?",
-      validate: (input) => (isNaN(input) ? "Please enter a number" : true),
-      transformer: (input) => currencyFormatter.format(input),
+      type: "autocomplete",
+      name: "field",
+      source: async ({ goal }, input) =>
+        Object.keys(goal).filter((key) =>
+          input ? key.startsWith(input) : true
+        ),
     },
   ]);
 
-  goals = [...goals, newGoal];
+  const edit = await inquirer.prompt(
+    goalCreationQuestions.filter((q) => q.name === field)
+  );
+  const newGoal = { ...goal, ...edit };
+  const retainedGoals = goals.filter((g) => g.tag !== goal.tag);
+  goals = [newGoal, ...retainedGoals];
   writeFile("Data/goals.json", JSON.stringify(goals), () => {});
   showGoals();
 }
